@@ -1,0 +1,82 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Hayvancılık Yönetim API",
+    "version": "1.0.0",
+    "description": "Gülvet & AsyaEt Hayvancılık Yönetim Sistemi için temel API dokümantasyonu."
+  },
+  "servers": [
+    { "url": "http://localhost:5000/api" }
+  ],
+  "paths": {
+    "/animals": {
+      "get": {
+        "summary": "Tüm hayvanları listeler",
+        "responses": {
+          "200": { "description": "Başarılı", "content": { "application/json": {} } }
+        }
+      },
+      "post": {
+        "summary": "Yeni hayvan ekler",
+        "requestBody": { "required": true, "content": { "application/json": {} } },
+        "responses": { "201": { "description": "Oluşturuldu" } }
+      }
+    },
+    "/animals/{id}": {
+      "get": {
+        "summary": "ID'ye göre hayvan getirir",
+        "parameters": [ { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } } ],
+        "responses": { "200": { "description": "Başarılı" }, "404": { "description": "Bulunamadı" } }
+      },
+      "put": {
+        "summary": "Hayvanı günceller",
+        "parameters": [ { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } } ],
+        "requestBody": { "required": true, "content": { "application/json": {} } },
+        "responses": { "200": { "description": "Başarılı" } }
+      },
+      "delete": {
+        "summary": "Hayvanı siler",
+        "parameters": [ { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } } ],
+        "responses": { "204": { "description": "Silindi" } }
+      }
+    },
+    "/animals/category/{category}": {
+      "get": {
+        "summary": "Kategoriye göre hayvanları listeler",
+        "parameters": [ { "name": "category", "in": "path", "required": true, "schema": { "type": "string" } } ],
+        "responses": { "200": { "description": "Başarılı" } }
+      }
+    },
+    "/animals/{animalId}/test-result": {
+      "post": {
+        "summary": "Test sonucu kaydeder",
+        "parameters": [ { "name": "animalId", "in": "path", "required": true, "schema": { "type": "string" } } ],
+        "requestBody": { "required": true, "content": { "application/json": {} } },
+        "responses": { "200": { "description": "Başarılı" } }
+      }
+    },
+    "/animals/{animalId}/complete-sale": {
+      "post": {
+        "summary": "Satış işlemini tamamlar",
+        "parameters": [ { "name": "animalId", "in": "path", "required": true, "schema": { "type": "string" } } ],
+        "requestBody": { "required": true, "content": { "application/json": {} } },
+        "responses": { "200": { "description": "Başarılı" } }
+      }
+    },
+    "/animals/reports": {
+      "get": {
+        "summary": "Raporları getirir",
+        "responses": { "200": { "description": "Başarılı" } }
+      }
+    },
+    "/animal-constants": {
+      "get": {
+        "summary": "Sabit değerleri getirir (kategoriler, test sonuçları vb.)",
+        "responses": { 
+          "200": { "description": "Başarılı" },
+          "410": { "description": "Eski endpoint /animals/constants artık kullanımdan kaldırıldı" }
+        }
+      }
+    }
+  }
+}

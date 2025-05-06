@@ -1,0 +1,33 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+      - name: Install dependencies
+        run: |
+          cd backend
+          npm run install:all
+      - name: Run tests
+        run: |
+          cd backend
+          npm test
+      - name: Run coverage
+        run: |
+          cd backend
+          npm run test:coverage
+      - name: Swagger/OpenAPI güncelliğini kontrol et
+        run: |
+          git diff --exit-code backend/swagger.json || (echo "⚠️ Swagger/OpenAPI dosyası değişti. Dokümantasyonu güncellediğinizden emin olun!" && exit 1)

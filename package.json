@@ -1,0 +1,31 @@
+{
+  "name": "livestock-management-system",
+  "version": "1.0.0",
+  "description": "Hayvancılık Yönetim Sistemi",
+  "scripts": {
+    "start:frontend": "cd frontend && npm start",
+    "start:backend": "cd backend && npm start",
+    "dev:backend": "cd backend && npm run dev",
+    "start": "concurrently \"npm run start:backend\" \"npm run start:frontend\"",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run start:frontend\"",
+    "install:all": "npm install && cd frontend && npm install && cd ../backend && npm install",
+    "db:migrate": "cd backend && node src/scripts/runMigrations.js",
+    "db:fix-settings": "cd backend && node src/scripts/migrations/fixSettingsTable.js",
+    "db:fix-users": "cd backend && node src/scripts/migrations/fixUsersTable.js",
+    "db:fix-permissions": "cd backend && node src/scripts/migrations/fixPermissionsTable.js",
+    "db:fix-imports": "cd backend && node src/scripts/fixSupabaseImport.js",
+    "db:fix-sql": "cd backend && node src/scripts/fixDatabasePermissionsSQL.js",
+    "db:fix-all": "npm run db:fix-imports && npm run db:fix-sql",
+    "update-env": "cd backend && node src/scripts/updateEnvConfig.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "dependencies": {
+    "formik": "^2.4.6",
+    "recharts": "^2.15.3",
+    "yup": "^1.6.1"
+  }
+}

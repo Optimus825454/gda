@@ -1,0 +1,393 @@
+/**
+ * Permission.js - u0130zin sistemi veri modeli
+ * Roller ve kullanu0131cu0131lar iu00e7in dinamik izin yu00f6netimi
+ */
+
+const { supabase } = require('../config/supabase');
+// Role modu00fclu00fcnu00fc iu00e7e aktarmu0131yoruz - du00f6ngu00fcsel bau011fu0131mlu0131lu0131u011fu0131 u00f6nlemek iu00e7in
+
+// u0130zin kontrolu00fcnu00fcn devre du0131u015fu0131 bu0131raku0131lu0131p bu0131raku0131lmayacau011fu0131nu0131 kontrol et
+const DISABLE_PERMISSION_CHECK = process.env.DISABLE_PERMISSION_CHECK === 'true';
+
+class Permission {
+    constructor({
+        id,
+        code,
+        name,
+        description,
+        module,
+        createdAt,
+        updatedAt
+    }) {
+        this.id = id;
+        this.code = code; // u0130zin kodu (u00f6r. MANAGE_USERS, VIEW_ANIMALS)
+        this.name = name; // u0130zin gu00f6ru00fcnen adu0131 (u00f6r. "Kullanu0131cu0131 Yu00f6netimi")
+        this.description = description;
+        this.module = module; // u0130zin modu00fclu00fc (u00f6r. "users", "animals")
+        this.createdAt = createdAt;
+        this.updatedAt = updatedAt;
+    }
+
+    // Veritabanu0131 kaydu0131ndan Permission nesnesi oluu015fturur
+    static fromDatabase(dbPermission) {
+        return new Permission({
+            id: dbPermission.id,
+            code: dbPermission.code,
+            name: dbPermission.name,
+            description: dbPermission.description,
+            module: dbPermission.module,
+            createdAt: dbPermission.created_at,
+            updatedAt: dbPermission.updated_at
+        });
+    }
+
+    // Permission nesnesini veritabanu0131 formatu0131na du00f6nu00fcu015ftu00fcru00fcr
+    toDatabase() {
+        return {
+            id: this.id,
+            code: this.code,
+            name: this.name,
+            description: this.description,
+            module: this.module,
+            created_at: this.createdAt || new Date(),
+            updated_at: new Date()
+        };
+    }
+
+    // Tu00fcm izinleri listele
+    static async findAll(options = {}) {
+        try {
+            // u0130zin kontrolu00fc devre du0131u015fu0131 bu0131raku0131lmu0131u015fsa, sahte izinler du00f6ndu00fcr
+            if (DISABLE_PERMISSION_CHECK) {
+                console.log('u0130zinler listesi istendi - ROL BAZLI KONTROL DEVRE DIu015eI');
+                return [
+                    new Permission({
+                        id: '1',
+                        code: 'ADMIN',
+                        name: 'Tam Yetki',
+                        description: 'Tam yu00f6netici yetkisi',
+                        module: 'system',
+                        createdAt: new Date(),
+                        updatedAt: new Date()
+                    }),
+                    new Permission({
+                        id: '2',
+                        code: 'READ_ALL',
+                        name: 'Okuma Yetkisi',
+                        description: 'Tu00fcm verileri okuma yetkisi',
+                        module: 'system',
+                        createdAt: new Date(),
+                        updatedAt: new Date()
+                    })
+                ];
+            }
+            
+            // Normal izin kontrolu00fc iu00e7in veritabanu0131ndan izinleri u00e7ek
+            let query = supabase
+                .from('permissions')
+                .select('*');
+                
+            // Modu00fcle gu00f6re filtreleme
+            if (options.module) {
+                query = query.eq('module', options.module);
+            }
+            
+            const { data: permissions, error } = await query;
+            
+            if (error) {
+                console.error('u0130zinler u00e7ekilirken hata:', error);
+                return [];
+            }
+            
+            return permissions.map(p => Permission.fromDatabase(p));
+        } catch (error) {
+            console.error('u0130zinler listelenirken hata:', error);
+            return [];
+        }
+    }
+
+    // ID'ye gu00f6re izin bulma
+    static async findById(id) {
+        try {
+            // u0130zin kontrolu00fc devre du0131u015fu0131 bu0131raku0131lmu0131u015fsa, sahte izin du00f6ndu00fcr
+            if (DISABLE_PERMISSION_CHECK) {
+                console.log(`ID'ye gu00f6re izin istendi (${id}) - ROL BAZLI KONTROL DEVRE DIu015eI`);
+                return new Permission({
+                    id: id,
+                    code: 'ADMIN',
+                    name: 'Tam Yetki',
+                    description: 'Tam yu00f6netici yetkisi',
+                    module: 'system',
+                    createdAt: new Date(),
+                    updatedAt: new Date()
+                });
+            }
+            
+            // Normal izin kontrolu00fc iu00e7in veritabanu0131ndan izni u00e7ek
+            const { data: permission, error } = await supabase
+                .from('permissions')
+                .select('*')
+                .eq('id', id)
+                .single();
+                
+            if (error) {
+                console.error(`ID'ye gu00f6re izin u00e7ekilirken hata:`, error);
+                throw error;
+            }
+            
+            if (!permission) {
+                throw new Error(`ID'si ${id} olan izin bulunamadu0131`);
+            }
+            
+            return Permission.fromDatabase(permission);
+        } catch (error) {
+            console.error(`ID'ye gu00f6re izin bulunurken hata:`, error);
+            throw error;
+        }
+    }
+
+    // Kod'a gu00f6re izin bulma
+    static async findByCode(code) {
+        try {
+            // u0130zin kontrolu00fc devre du0131u015fu0131 bu0131raku0131lmu0131u015fsa, sahte izin du00f6ndu00fcr
+            if (DISABLE_PERMISSION_CHECK) {
+                console.log(`Koda gu00f6re izin istendi (${code}) - ROL BAZLI KONTROL DEVRE DIu015eI`);
+                return new Permission({
+                    id: '1',
+                    code: code,
+                    name: 'Tam Yetki',
+                    description: 'Tam yu00f6netici yetkisi',
+                    module: 'system',
+                    createdAt: new Date(),
+                    updatedAt: new Date()
+                });
+            }
+            
+            // Normal izin kontrolu00fc iu00e7in veritabanu0131ndan izni u00e7ek
+            const { data: permission, error } = await supabase
+                .from('permissions')
+                .select('*')
+                .eq('code', code)
+                .single();
+                
+            if (error) {
+                console.error('Koda gu00f6re izin u00e7ekilirken hata:', error);
+                return null;
+            }
+            
+            if (!permission) {
+                return null;
+            }
+            
+            return Permission.fromDatabase(permission);
+        } catch (error) {
+            console.error('Koda gu00f6re izin bulunurken hata:', error);
+            return null;
+        }
+    }
+
+    // Rol ID'sine gu00f6re izinleri bulma
+    static async findByRoleId(roleId) {
+        try {
+            // u0130zin kontrolu00fc devre du0131u015fu0131 bu0131raku0131lmu0131u015fsa, tu00fcm izinleri du00f6ndu00fcr
+            if (DISABLE_PERMISSION_CHECK) {
+                console.log(`Role gu00f6re izinler istendi (${roleId}) - ROL BAZLI KONTROL DEVRE DIu015eI`);
+                return [
+                    new Permission({
+                        id: '1',
+                        code: 'ADMIN',
+                        name: 'Tam Yetki',
+                        description: 'Tam yu00f6netici yetkisi',
+                        module: 'system',
+                        createdAt: new Date(),
+                        updatedAt: new Date()
+                    }),
+                    new Permission({
+                        id: '2',
+                        code: 'READ_ALL',
+                        name: 'Okuma Yetkisi',
+                        description: 'Tu00fcm verileri okuma yetkisi',
+                        module: 'system',
+                        createdAt: new Date(),
+                        updatedAt: new Date()
+                    }),
+                    new Permission({
+                        id: '3',
+                        code: 'WRITE_ALL',
+                        name: 'Yazma Yetkisi',
+                        description: 'Tu00fcm verileri yazma yetkisi',
+                        module: 'system',
+                        createdAt: new Date(),
+                        updatedAt: new Date()
+                    })
+                ];
+            }
+            
+            // Normal izin kontrolu00fc iu00e7in veritabanu0131ndan izinleri u00e7ek
+            const { data, error } = await supabase
+                .from('role_permissions')
+                .select('permission_id')
+                .eq('role_id', roleId);
+                
+            if (error) {
+                console.error('Rol izinleri u00e7ekilirken hata:', error);
+                return [];
+            }
+            
+            if (!data || data.length === 0) {
+                return [];
+            }
+            
+            // u0130zin ID'lerini al
+            const permissionIds = data.map(rp => rp.permission_id);
+            
+            // u0130zinleri u00e7ek
+            const { data: permissions, error: permissionsError } = await supabase
+                .from('permissions')
+                .select('*')
+                .in('id', permissionIds);
+                
+            if (permissionsError) {
+                console.error('u0130zinler u00e7ekilirken hata:', permissionsError);
+                return [];
+            }
+            
+            return permissions.map(p => Permission.fromDatabase(p));
+        } catch (error) {
+            console.error('Role gu00f6re izinler bulunurken hata:', error);
+            return [];
+        }
+    }
+
+    // Kullanu0131cu0131 ID'sine gu00f6re izinleri bulma (tu00fcm rollerinden gelen izinler)
+    static async findByUserId(userId) {
+        try {
+            // u0130zin kontrolu00fc devre du0131u015fu0131 bu0131raku0131lmu0131u015fsa, tu00fcm izinleri du00f6ndu00fcr
+            if (DISABLE_PERMISSION_CHECK) {
+                console.log(`Kullanu0131cu0131 ID'sine gu00f6re izinler istendi (${userId}) - ROL BAZLI KONTROL DEVRE DIu015eI`);
+                return [
+                    new Permission({
+                        id: '1',
+                        code: 'ADMIN',
+                        name: 'Tam Yetki',
+                        description: 'Tam yu00f6netici yetkisi',
+                        module: 'system',
+                        createdAt: new Date(),
+                        updatedAt: new Date()
+                    }),
+                    new Permission({
+                        id: '2',
+                        code: 'READ_ALL',
+                        name: 'Okuma Yetkisi',
+                        description: 'Tu00fcm verileri okuma yetkisi',
+                        module: 'system',
+                        createdAt: new Date(),
+                        updatedAt: new Date()
+                    }),
+                    new Permission({
+                        id: '3',
+                        code: 'WRITE_ALL',
+                        name: 'Yazma Yetkisi',
+                        description: 'Tu00fcm verileri yazma yetkisi',
+                        module: 'system',
+                        createdAt: new Date(),
+                        updatedAt: new Date()
+                    }),
+                    new Permission({
+                        id: '4',
+                        code: 'MANAGE_ALL',
+                        name: 'Yu00f6netim Yetkisi',
+                        description: 'Tu00fcm verileri yu00f6netme yetkisi',
+                        module: 'system',
+                        createdAt: new Date(),
+                        updatedAt: new Date()
+                    }),
+                    new Permission({
+                        id: '5',
+                        code: 'VIEW_ANIMALS_PAGE',
+                        name: 'Hayvanlar Sayfasu0131 Gu00f6ru00fcntu00fcleme',
+                        description: 'Hayvanlar sayfasu0131nu0131 gu00f6ru00fcntu00fcleme yetkisi',
+                        module: 'pages',
+                        createdAt: new Date(),
+                        updatedAt: new Date()
+                    }),
+                    new Permission({
+                        id: '6',
+                        code: 'MANAGE_ROLES',
+                        name: 'Rol Yu00f6netimi',
+                        description: 'Rolleri yu00f6netme yetkisi',
+                        module: 'roles',
+                        createdAt: new Date(),
+                        updatedAt: new Date()
+                    })
+                ];
+            }
+            
+            // Normal izin kontrolu00fc iu00e7in veritabanu0131ndan izinleri u00e7ek
+            
+            // u00d6nce kullanu0131cu0131nu0131n rollerini bul
+            const { data: userRoles, error: userRolesError } = await supabase
+                .from('user_roles')
+                .select('role_id')
+                .eq('user_id', userId);
+                
+            if (userRolesError) {
+                console.error('Kullanu0131cu0131 rolleri u00e7ekilirken hata:', userRolesError);
+                return [];
+            }
+            
+            if (!userRoles || userRoles.length === 0) {
+                return [];
+            }
+            
+            // Rol ID'lerini al
+            const roleIds = userRoles.map(ur => ur.role_id);
+            
+            // Her rol iu00e7in izinleri u00e7ek ve birleu015ftir
+            let allPermissions = [];
+            
+            for (const roleId of roleIds) {
+                const permissions = await Permission.findByRoleId(roleId);
+                allPermissions = [...allPermissions, ...permissions];
+            }
+            
+            // Tekrarlayan izinleri kaldu0131r (code'a gu00f6re)
+            const uniquePermissions = [];
+            const permissionCodes = new Set();
+            
+            for (const permission of allPermissions) {
+                if (!permissionCodes.has(permission.code)) {
+                    permissionCodes.add(permission.code);
+                    uniquePermissions.push(permission);
+                }
+            }
+            
+            return uniquePermissions;
+        } catch (error) {
+            console.error('Kullanu0131cu0131 ID\'sine gu00f6re izinler bulunurken hata:', error);
+            return [];
+        }
+    }
+
+    // Kullanu0131cu0131nu0131n belirli bir izne sahip olup olmadu0131u011fu0131nu0131 kontrol eder
+    static async hasPermission(userId, permissionCode) {
+        try {
+            // u0130zin kontrolu00fc devre du0131u015fu0131 bu0131raku0131lmu0131u015fsa, her zaman true du00f6ndu00fcr
+            if (DISABLE_PERMISSION_CHECK) {
+                console.log(`u0130zin kontrolu00fc (${permissionCode}) - ROL BAZLI KONTROL DEVRE DIu015eI`);
+                return true;
+            }
+            
+            // Kullanu0131cu0131nu0131n tu00fcm izinlerini al
+            const userPermissions = await Permission.findByUserId(userId);
+            
+            // u0130zin kodunu kontrol et
+            return userPermissions.some(p => p.code === permissionCode);
+        } catch (error) {
+            console.error('u0130zin kontrolu00fc su0131rasu0131nda hata:', error);
+            return false;
+        }
+    }
+}
+
+module.exports = Permission;
