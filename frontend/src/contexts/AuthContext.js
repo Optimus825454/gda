@@ -1,228 +1,89 @@
-import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
-import { supabase } from '../supabaseClient';
-import axiosInstance, { getToken, setToken } from '../utils/axiosConfig';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import axiosInstance from '../utils/axiosConfig';
 import { useNavigate } from 'react-router-dom';
-import { ROLES } from './RoleContext';
 
 const AuthContext = createContext();
 
-// Rol bazlı izin haritası
-export const ROLE_PERMISSIONS = {
-    [ROLES.SYSTEM_ADMIN]: [
-        'READ_ALL', 'WRITE_ALL', 'MANAGE_ALL', 'ADMIN',
-        // Sayfa görüntüleme izinleri
-        'VIEW_ANIMALS_PAGE', 'VIEW_ANIMAL_DETAILS_PAGE', 'VIEW_ADD_ANIMAL_PAGE',
-        'VIEW_SHELTERS_PAGE', 'VIEW_SHELTER_DETAILS_PAGE', 'VIEW_PADDOCKS_PAGE', 'VIEW_PADDOCK_DETAILS_PAGE',
-        'VIEW_TESTS_PAGE', 'VIEW_TEST_DETAILS_PAGE', 'VIEW_HEALTH_RECORDS_PAGE',
-        'VIEW_SALES_PAGE', 'VIEW_SALE_DETAILS_PAGE', 'VIEW_LOGISTICS_PAGE',
-        'VIEW_USERS_PAGE', 'VIEW_USER_DETAILS_PAGE', 'VIEW_ROLES_PAGE', 'VIEW_ROLE_DETAILS_PAGE',
-        'VIEW_REPORTS_PAGE', 'VIEW_SETTINGS_PAGE', 'VIEW_DASHBOARD_PAGE'
-    ],
-    [ROLES.GULVET_ADMIN]: [
-        'READ_ANIMAL', 'WRITE_ANIMAL', 'MANAGE_ANIMAL',
-        'READ_HEALTH', 'WRITE_HEALTH', 'MANAGE_HEALTH',
-        'READ_FINANCE', 'WRITE_FINANCE', 'MANAGE_FINANCE',
-        'READ_USER', 'WRITE_USER'
-    ],
-    [ROLES.DIMES_ADMIN]: [
-        'READ_ANIMAL', 'WRITE_ANIMAL',
-        'READ_FINANCE', 'WRITE_FINANCE',
-        'READ_LOGISTICS', 'WRITE_LOGISTICS'
-    ],
-    [ROLES.ASYAET_ADMIN]: [
-        'READ_ANIMAL', 'WRITE_ANIMAL',
-        'READ_LOGISTICS', 'WRITE_LOGISTICS',
-        'READ_FINANCE', 'WRITE_FINANCE'
-    ],
-    [ROLES.USER]: [
-        'READ_ANIMAL',
-        'READ_HEALTH',
-        'READ_FINANCE',
-        'READ_LOGISTICS'
-    ]
-};
-
-export function AuthProvider({ children }) {
-    const [user, setUser] = useState(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
-    const [isAuthenticated, setIsAuthenticated] = useState(false);
-    const [dbStatus, setDbStatus] = useState({ isOnline: true, lastChecked: null });
-    const [userPermissions, setUserPermissions] = useState([]);
-    const authStateRef = useRef('INITIAL');
+export function AuthProvider( { children } ) {
+    const [user, setUser] = useState( null );
+    const [loading, setLoading] = useState( false );
+    const [error, setError] = useState( null );
+    const [isAuthenticated, setIsAuthenticated] = useState( false );
+    const [userPermissions, setUserPermissions] = useState( [] );
     const navigate = useNavigate();
-    
-    // Kullanıcı bilgilerini sunucudan almak için
-    const fetchCurrentUser = useCallback(async (skipTokenCheck = false) => {
+
+    // Giriş işlemi (Backend'in token dönmediğini ve şifre kontrolü yaptığını varsayıyoruz)    
+    const login = async (username, password) => {
+        setLoading( true );
+        setError( null );
         try {
-            if (!skipTokenCheck && !getToken()) {
-                setUser(null);
-                setIsAuthenticated(false);
-                setUserPermissions([]);
-                return;
-            }
-            
-            const response = await axiosInstance.get('/auth/profile');
-            const userData = response.data?.data || response.data;
-            
-            if (userData) {
-                // Kullanıcı rollerini normalize et
-                if (!userData.roles && userData.profile?.role) {
-                    userData.roles = [{ name: userData.profile.role }];
-                } else if (!userData.roles) {
-                    userData.roles = [{ name: ROLES.USER }];
-                }
-                
-                setUser(userData);
-                setIsAuthenticated(true);
-                
-                // Kullanıcı izinlerini güncelle
-                const userRoles = userData.roles.map(role => role.name);
-                const permissions = [];
-                
-                userRoles.forEach(roleName => {
-                    const rolePermissions = ROLE_PERMISSIONS[roleName];
-                    if (rolePermissions) {
-                        permissions.push(...rolePermissions);
-                    }
-                });
-                
-                setUserPermissions(permissions);
-            } else {
-                throw new Error('Geçersiz kullanıcı verisi');
-            }
-        } catch (err) {
-            console.error('Error fetching current user:', err);
-            setUser(null);
-            setIsAuthenticated(false);
-            setUserPermissions([]);
-            
-            if (err.response?.status === 401) {
-                setToken(null);
-                navigate('/login');
-            }
-            throw err;
-        }
-    }, [navigate]);
+            // Temel kimlik doğrulama bilgilerini sessionStorage'a kaydet
+            sessionStorage.setItem( 'currentUser', username );
+            sessionStorage.setItem( 'currentPassword', password );
 
-    // Auth state değişikliklerini takip et
-    useEffect(() => {
-        console.log('[AuthContext] Auth state changed:', authStateRef.current);
-        
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-            authStateRef.current = event;
-            
-            if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-                if (session?.user) {
-                    setUser(session.user);
-                    setIsAuthenticated(true);
-                    const token = session.access_token;
-                    localStorage.setItem('token', token);
-                    axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-                }
-            } else if (event === 'SIGNED_OUT') {
-                setUser(null);
-                setIsAuthenticated(false);
-                localStorage.removeItem('token');
-                delete axiosInstance.defaults.headers.common['Authorization'];
-                navigate('/login');
-            }
-            
-            setLoading(false);
-        });
+            // Login isteği yaparken kimlik doğrulama bilgileri interceptor tarafından otomatik eklenir
+            const response = await axiosInstance.post( '/auth/login', { username, password } );
 
-        return () => {
-            subscription.unsubscribe();
-        };
-    }, [navigate]);
+            if ( response.data.success ) {
+                const { user: userData, permissions } = response.data;
 
-    // Giriş işlemi
-    const login = async (email, password) => {
-        try {
-            setError(null);
-            setLoading(true);
-            
-            const response = await axiosInstance.post('/auth/login', { email, password });
-            
-            if (response.data?.success && (response.data?.access_token || response.data?.token)) {
-                const token = response.data?.access_token || response.data?.token;
-                setToken(token);
-                await fetchCurrentUser(true);
+                setUser( userData ); // Kullanıcı bilgilerini state'e set et
+                setUserPermissions( permissions || [] );
+                setIsAuthenticated( true );
+                setLoading( false );
+                navigate( '/' ); // Ana sayfaya yönlendir
                 return { success: true };
+            } else {
+                // Backend'den gelen hata mesajını kullan
+                throw new Error( response.data.message || 'Giriş başarısız. Kullanıcı adı veya şifre hatalı.' );
             }
-            
-            throw new Error('Geçersiz yanıt formatı');
-        } catch (err) {
-            console.error('Login error:', err);
-            const errorMsg = err.response?.data?.message || err.response?.data?.error || err.message || 'Giriş yapılamadı.';
-            setError(errorMsg);
-            return { success: false, error: errorMsg };
-        } finally {
-            setLoading(false);
+        } catch ( err ) {
+            console.error( 'Giriş hatası:', err );
+            const errorMessage = err.response?.data?.message || err.message || 'Giriş yapılırken bir hata oluştu';
+            setError( errorMessage );
+            setIsAuthenticated( false );
+            setUser( null );
+            setUserPermissions( [] );
+            setLoading( false );
+            return {
+                success: false,
+                error: errorMessage
+            };
         }
     };
 
-    // Çıkış işlemi
-    const logout = async () => {
-        try {
-            setLoading(true);
-            await axiosInstance.post('/auth/logout');
-            await supabase.auth.signOut();
-        } catch (err) {
-            console.error('Logout error:', err);
-        } finally {
-            setToken(null);
-            setUser(null);
-            setIsAuthenticated(false);
-            setUserPermissions([]);
-            setLoading(false);
-            navigate('/login');
-        }
+    // Çıkış işlemi (State'leri sıfırla ve kimlik bilgilerini temizle)
+    const logout = () => {
+        // Session storage'dan kimlik bilgilerini temizle
+        sessionStorage.removeItem( 'currentUser' );
+        sessionStorage.removeItem( 'currentPassword' );
+
+        setUser( null );
+        setUserPermissions( [] );
+        setIsAuthenticated( false );
+        setError( null );
+
+        // Login sayfasına yönlendir
+        navigate( '/login' );
     };
 
-    // Kullanıcının belirli bir izne sahip olup olmadığını kontrol et
-    const hasPermission = useCallback((requiredPermission) => {
-        if (!user) return false;
-        return true; // Şu an için tüm kullanıcılara tam yetki veriyoruz
-    }, [user]);
+    // İzin kontrolü (Backend'den izinler geliyorsa bu mantık kalabilir)
+    const hasPermission = ( permissionCode ) => {
+        if ( !permissionCode ) return true; // İzin kodu yoksa her zaman izinli
+        if ( !isAuthenticated || !user ) return false; // Kullanıcı giriş yapmamışsa izni yok
+        return userPermissions.includes( permissionCode );
+    };
 
-    const value = {
+    const value = useMemo( () => ( {
         user,
         loading,
         error,
         isAuthenticated,
-        dbStatus,
         userPermissions,
         login,
         logout,
-        fetchCurrentUser,
-        hasPermission,
-        signIn: useCallback(async (email, password) => {
-            try {
-                setError(null);
-                const { data, error } = await supabase.auth.signInWithPassword({
-                    email,
-                    password
-                });
-
-                if (error) throw error;
-                return data;
-            } catch (error) {
-                setError(error.message);
-                throw error;
-            }
-        }, []),
-        signOut: useCallback(async () => {
-            try {
-                setError(null);
-                const { error } = await supabase.auth.signOut();
-                if (error) throw error;
-            } catch (error) {
-                setError(error.message);
-                throw error;
-            }
-        }, [])
-    };
+        hasPermission
+    } ), [user, loading, error, isAuthenticated, userPermissions] );
 
     return (
         <AuthContext.Provider value={value}>
@@ -232,9 +93,9 @@ export function AuthProvider({ children }) {
 }
 
 export function useAuth() {
-    const context = useContext(AuthContext);
-    if (!context) {
-        throw new Error('useAuth must be used within an AuthProvider');
+    const context = useContext( AuthContext );
+    if ( !context ) {
+        throw new Error( 'useAuth must be used within an AuthProvider' );
     }
     return context;
 }

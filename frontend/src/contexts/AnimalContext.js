@@ -252,6 +252,51 @@ export function AnimalProvider( { children } ) {
         }
     };
 
+    // Satış formu için küpe no ile hayvan arama
+    const searchAnimalsByEarTagForSale = useCallback(async (term) => {
+        if (!term || term.length < 2) {
+            return []; // Arama terimi çok kısaysa boş dizi döndür
+        }
+        try {
+            // setLoading(true); // Bu fonksiyonlar anlık olduğu için genel loading'i etkilemesin
+            const response = await axiosInstance.get(`/animals/search/ear-tag-for-sale?term=${encodeURIComponent(term)}`);
+            if (response.data && response.data.success) {
+                return response.data.data || [];
+            }
+            console.error('Küpe no ile hayvan arama hatası (API):', response.data.error || 'Bilinmeyen hata');
+            return [];
+        } catch (err) {
+            console.error('Küpe no ile hayvan arama hatası (Network/İstek):', err);
+            // setError('Küpe no ile hayvan aranırken bir hata oluştu.'); // Genel hatayı set etme
+            return []; // Hata durumunda boş dizi döndür
+        } finally {
+            // setLoading(false);
+        }
+    }, []);
+
+    // Satış formu için hayvan ID (tespit no) ile hayvan arama
+    const searchAnimalsByAnimalIdForSale = useCallback(async (term) => {
+        if (!term || term.length < 2) {
+            return [];
+        }
+        try {
+            // setLoading(true);
+            const response = await axiosInstance.get(`/animals/search/animal-id-for-sale?term=${encodeURIComponent(term)}`);
+            if (response.data && response.data.success) {
+                return response.data.data || [];
+            }
+            console.error('Tespit no ile hayvan arama hatası (API):', response.data.error || 'Bilinmeyen hata');
+            return [];
+        } catch (err) {
+            console.error('Tespit no ile hayvan arama hatası (Network/İstek):', err);
+            // setError('Tespit no ile hayvan aranırken bir hata oluştu.');
+            return [];
+        } finally {
+            // setLoading(false);
+        }
+    }, []);
+
+
     const contextValue = {
         animals,
         constants,
@@ -266,7 +311,9 @@ export function AnimalProvider( { children } ) {
         completeSale,
         fetchReports,
         getAnimalStats,
-        bulkCreateAnimals
+        bulkCreateAnimals,
+        searchAnimalsByEarTagForSale, // Yeni fonksiyonu context'e ekle
+        searchAnimalsByAnimalIdForSale // Yeni fonksiyonu context'e ekle
     };
 
     return (

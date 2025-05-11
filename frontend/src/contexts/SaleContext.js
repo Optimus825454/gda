@@ -32,16 +32,16 @@ export function SaleProvider( { children } ) {
 
     // Bekleyen satışları getir
     const fetchPendingSales = useCallback( async () => {
-        setLoading( true );
         try {
-            const response = await axiosInstance.get( `${API_BASE_URL}/sales/pending` );
-            setSales( response.data.data );
-            setError( null );
+            // Pending endpoint kaldırıldı, yerine başka bir endpoint eklenebilir
+            // const response = await axiosInstance.get( `${API_BASE_URL}/sales/pending` );
+            // const pendingSales = response.data.data || response.data || [];
+            // setSales( Array.isArray( pendingSales ) ? pendingSales : [] );
+            setSales( [] ); // Şimdilik boş liste döndürüyoruz
         } catch ( err ) {
-            setError( 'Bekleyen satışlar yüklenirken hata oluştu' );
             console.error( 'Bekleyen satışlar yüklenirken hata:', err );
-        } finally {
-            setLoading( false );
+            setError( err.message || 'Bekleyen satışlar yüklenemedi' );
+            setSales( [] );
         }
     }, [] );
 
@@ -182,6 +182,23 @@ export function SaleProvider( { children } ) {
         }
     }, [fetchSales] );
 
+    // Satış kaydı sil
+    const deleteSale = useCallback( async ( saleId ) => {
+        setLoading( true );
+        try {
+            const response = await axiosInstance.delete( `${API_BASE_URL}/sales/${saleId}` );
+            await fetchSales(); // Listeyi güncelle
+            setError( null );
+            return response.data;
+        } catch ( err ) {
+            setError( 'Satış kaydı silinirken hata oluştu' );
+            console.error( 'Satış kaydı silinirken hata:', err );
+            throw err;
+        } finally {
+            setLoading( false );
+        }
+    }, [fetchSales] );
+
     const contextValue = {
         sales,
         loading,
@@ -192,7 +209,8 @@ export function SaleProvider( { children } ) {
         bulkCreateSales,
         fetchSaleStatistics,
         updateSaleStatus,
-        updateSaleDetails
+        updateSaleDetails,
+        deleteSale // Yeni fonksiyonu context'e ekle
     };
 
     return (

@@ -35,21 +35,16 @@ export function TestProvider( { children } ) {
 
     // Bekleyen testleri getir
     const fetchPendingTests = useCallback( async () => {
-        setLoading( true );
         try {
-            const response = await axiosInstance.get( `${API_BASE_URL}/tests/pending` );
-            console.log( 'Bekleyen testler yanıtı:', response.data );
-
-            const pendingTests = response.data.data || response.data || [];
-            setTests( Array.isArray( pendingTests ) ? pendingTests : [] );
-            setError( null );
+            // Pending endpoint kaldırıldı, yerine başka bir endpoint eklenebilir
+            // const response = await axiosInstance.get( `${API_BASE_URL}/tests/pending` );
+            // const pendingTests = response.data.data || response.data || [];
+            // setTests( Array.isArray( pendingTests ) ? pendingTests : [] );
+            setTests( [] ); // Şimdilik boş liste döndürüyoruz
         } catch ( err ) {
-            const errorMessage = err.response?.data?.message || err.message || 'Bekleyen testler yüklenirken hata oluştu';
-            setError( errorMessage );
             console.error( 'Bekleyen testler yüklenirken hata:', err );
+            setError( err.message || 'Bekleyen testler yüklenemedi' );
             setTests( [] );
-        } finally {
-            setLoading( false );
         }
     }, [] );
 

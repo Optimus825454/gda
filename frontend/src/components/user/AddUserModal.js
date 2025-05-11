@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import axiosInstance from '../../utils/axiosConfig';
+import { ROLES } from '../../contexts/RoleContext';
 
 const AddUserModal = ( { isOpen, onClose, onUserAdded } ) => {
     const [formData, setFormData] = useState( {
@@ -11,29 +12,15 @@ const AddUserModal = ( { isOpen, onClose, onUserAdded } ) => {
         roleNames: [], // Rol isimleri dizisi
         position: ''
     } );
-    const [availableRoles, setAvailableRoles] = useState( [] );
+
+    // Sabit roller
+    const availableRoles = [
+        { id: '1', name: ROLES.ADMIN },
+        { id: '2', name: ROLES.USER }
+    ];
+
     const [loading, setLoading] = useState( false );
     const [error, setError] = useState( null );
-
-    useEffect( () => {
-        if ( isOpen ) {
-            // Modal açıldığında mevcut rolleri çek
-            const fetchRoles = async () => {
-                try {
-                    const res = await axiosInstance.get( '/roles' ); // Backend endpoint'i varsayımı
-                    if ( res.data.success ) {
-                        setAvailableRoles( res.data.data || [] );
-                    } else {
-                        setError( res.data.error || 'Roller alınırken bir hata oluştu.' );
-                    }
-                } catch ( err ) {
-                    console.error( 'Roller alınırken hata:', err );
-                    setError( 'Roller alınırken bir hata oluştu.' );
-                }
-            };
-            fetchRoles();
-        }
-    }, [isOpen] ); // isOpen değiştiğinde çalış
 
     const handleChange = ( e ) => {
         const { name, value } = e.target;
@@ -63,7 +50,7 @@ const AddUserModal = ( { isOpen, onClose, onUserAdded } ) => {
         setError( null );
 
         try {
-            const res = await axiosInstance.post( '/users', formData ); // Backend endpoint'i varsayımı
+            const res = await axiosInstance.post( '/users', formData );
             if ( res.data.success ) {
                 alert( 'Kullanıcı başarıyla eklendi!' );
                 setFormData( { // Formu sıfırla
