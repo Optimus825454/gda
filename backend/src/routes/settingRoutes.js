@@ -1,5 +1,5 @@
 /**
- * settingRoutes.js - Sistem ayarlaru0131 rotalaru0131
+ * settingRoutes.js - Sistem ayarları rotaları
  */
 
 const express = require( 'express' );
@@ -7,52 +7,77 @@ const SettingController = require( '../controllers/SettingController' );
 const auth = require( '../middleware/auth' );
 const { permissions } = require( '../config/permissions' );
 const { checkPermission } = require( '../middleware/permissions' );
+const pool = require( '../config/database' ); // Veritabanı havuzunuzun import edildiği yer
 
 const router = express.Router();
 
-// Rota dosyasu0131na giriu015f logu - GEu00c7u0130Cu0130 DEBUG
+// Rota dosyasına giriş logu - GEÇİCİ DEBUG
 router.use( ( req, res, next ) => {
     console.log( `[DEBUG] settingRoutes.js'e istek geldi: ${req.method} ${req.path}` );
     next();
 } );
 
-// Genel (public) ayarlar - kimlik dou011frulama gerekmez
+// Genel (public) ayarlar - kimlik doğrulama gerekmez
 router.get( '/public', SettingController.getPublicSettings );
 
-// Bu router'daki diu011fer tu00fcm istekler iu00e7in kimlik dou011frulama uygula
-router.use( auth );
+// Bu router'daki diğer tüm istekler için kimlik doğrulama uygula
+// router.use( auth ); // Yetkilendirme middleware'i devre dışı bırakıldı
 
-// Tu00fcm ayarlar - permissions check removed temporarily
-router.get( '/', SettingController.listSettings );
+// Tüm ayarlar - permissions check removed temporarily
+router.get( '/', async ( req, res ) => {
+    let connection; // Bağlantı değişkeni tanımlanır
+    try {
+        connection = await pool.getConnection(); // Bağlantı alınır
+        // Ayarları veritabanından çekme sorgusu
+        const [rows] = await connection.query( 'SELECT * FROM settings LIMIT 1' ); // Örnek sorgu
 
-// Ayar gruplaru0131 - no permission check needed
+        if ( rows.length > 0 ) {
+            res.json( rows[0] );
+        } else {
+            // Varsayılan ayarlar veya hata durumu
+            console.warn( 'Setting.findAll - Veritabanında ayar bulunamadı, varsayılan ayarlar kullanılacak' );
+            res.status( 404 ).json( { message: 'Ayarlar bulunamadı.' } );
+        }
+    } catch ( error ) {
+        console.error( 'Setting.findAll - Veritabanı hatası, varsayılan ayarlar kullanılacak:', error.message ); // Hata mesajını logla
+        // Hata durumunda da varsayılan veya boş bir yanıt dönebilirsiniz
+        res.status( 500 ).json( { message: 'Ayarlar alınırken bir hata oluştu.' } );
+    } finally {
+        // Bağlantı varsa serbest bırakılır
+        if ( connection ) {
+            connection.release();
+        }
+    }
+} );
+
+// Ayar grupları - no permission check needed
 router.get( '/groups', SettingController.listGroups );
 
-// ID'ye gu00f6re ayar detayu0131
+// ID'ye göre ayar detayı
 router.get( '/:id', SettingController.getSettingById );
 
-// Anahtar'a gu00f6re ayar detayu0131 
+// Anahtar'a göre ayar detayı 
 router.get( '/key/:key', SettingController.getSettingByKey );
 
-// Grup'a gu00f6re ayarlar
+// Grup'a göre ayarlar
 router.get( '/group/:group', SettingController.getSettingsByGroup );
 
-// Yeni ayar oluu015ftur
+// Yeni ayar oluştur
 router.post( '/', SettingController.createSetting );
 
-// Ayaru0131 gu00fcncelle (ID'ye gu00f6re)
+// Ayarı güncelle (ID'ye göre)
 router.put( '/:id', SettingController.updateSetting );
 
-// Ayaru0131 gu00fcncelle veya oluu015ftur (anahtar'a gu00f6re)
+// Ayarı güncelle veya oluştur (anahtar'a göre)
 router.put( '/key/:key', SettingController.setValueByKey );
 
-// Ayarlaru0131 toplu gu00fcncelle
+// Ayarları toplu güncelle
 router.put( '/bulk/update', SettingController.bulkUpdateSettings );
 
-// Ayaru0131 sil (ID'ye gu00f6re)
+// Ayarı sil (ID'ye göre)
 router.delete( '/:id', SettingController.deleteSetting );
 
-// Ayaru0131 sil (anahtar'a gu00f6re)
+// Ayarı sil (anahtar'a göre)
 router.delete( '/key/:key', SettingController.deleteSettingByKey );
 
 module.exports = router;

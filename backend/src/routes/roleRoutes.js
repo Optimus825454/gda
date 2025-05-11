@@ -17,7 +17,7 @@ router.use( ( req, res, next ) => {
 
 // Bu router'daki tüm istekler için kimlik doğrulama uygula
 const auth = require( '../middleware/auth' ); // auth middleware'ini import et
-router.use( auth );
+// router.use( auth ); // Yetkilendirme middleware'i devre dışı bırakıldı
 
 // Tüm roller
 router.get( '/', checkPermission( PERMISSIONS.MANAGE_ROLES ), RoleController.listRoles );

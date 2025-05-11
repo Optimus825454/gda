@@ -74,4 +74,9 @@ router.get('/dashboard',
     TestController.getDashboardData
 );
 
+// Test listesi ve işlemleri
+router.get('/:id', TestController.getTestById);
+router.put('/:id', TestController.updateTest);
+router.delete('/:id', TestController.deleteTest);
+
 module.exports = router;

@@ -1,5 +1,7 @@
-const Animal = require( '../models/Animal' );
+const Animal = require( '../models/Animal' ); // Bu model Supabase kullanıyor, belki kaldırılabilir veya sadece sabitler için tutulabilir.
 const AnimalProtocol = require( './AnimalProtocol' );
+const hayvanlarModel = require( '../models/HayvanlarModel' ); // MySQL modelini import et
+const { calculateAnimalStatistics } = require( '../utils/animalStatsHelper' ); // Yardımcı fonksiyonu import et
 
 class AnimalService extends AnimalProtocol {
     constructor() {
@@ -78,63 +80,52 @@ class AnimalService extends AnimalProtocol {
      */
     static async generateReports() {
         try {
-            // Kategori bazlı envanter
-            const inventory = {};
-            const categories = Object.values( Animal.CATEGORIES );
+            // MySQL'den tüm hayvanları çek
+            const allAnimals = await hayvanlarModel.findAll();
 
-            for ( const category of categories ) {
-                const animals = await Animal.findByCategory( category );
-                inventory[category] = {
-                    total: animals.length,
-                    unsold: animals.filter( a => a.saleStatus !== Animal.SALE_STATUS.SATILDI ).length,
-                    sold: animals.filter( a => a.saleStatus === Animal.SALE_STATUS.SATILDI ).length
-                };
-            }
+            // İstatistikleri hesapla
+            const reports = calculateAnimalStatistics( allAnimals );
 
-            // Test durumu özeti
-            const [bekleyenler, pozitifler, negatifler] = await Promise.all( [
-                Animal.findByTestResult( null ),
-                Animal.findByTestResult( Animal.TEST_RESULTS.POZITIF ),
-                Animal.findByTestResult( Animal.TEST_RESULTS.NEGATIF )
-            ] );
-
-            const testResults = {
-                bekleyenler: bekleyenler.length,
-                pozitifler: pozitifler.length,
-                negatifler: negatifler.length
+            // JSON çıktısındaki formatı eşleştirmek için veriyi yeniden düzenle
+            const formattedReports = {
+                animals: {
+                    toplam: reports.animals.total,
+                    inek: reports.animals.byCategory['INEK'] || 0,
+                    duve: reports.animals.byCategory['DUVE'] || 0,
+                    gebeDuve: reports.animals.pregnancy.gebeDuve || 0, // Gebelik istatistiklerinden al
+                    tohumluDuve: reports.animals.byCategory['TOHUMLU_DUVE'] || 0,
+                    buzagi: reports.animals.byCategory['BUZAGI'] || 0,
+                    gebeInek: reports.animals.pregnancy.gebeInek || 0, // Gebelik istatistiklerinden al
+                    toplam_gebe: reports.animals.pregnancy.total || 0, // Gebelik istatistiklerinden al
+                    kesimeAyrilan: reports.animals.byPurpose['KESIM'] || 0, // Amaç istatistiklerinden al
+                    damizlikAyrilan: reports.animals.byPurpose['DAMIZLIK'] || 0, // Amaç istatistiklerinden al
+                    satisHazir: reports.animals.bySaleStatus['SATISA_HAZIR'] || 0, // Satış durumu istatistiklerinden al
+                    satiliyor: reports.animals.bySaleStatus['SATILIYOR'] || 0, // Satış durumu istatistiklerinden al
+                    satilan: reports.animals.bySaleStatus['SATILDI'] || 0, // Satış durumu istatistiklerinden al
+                    satisBekleyen: reports.animals.bySaleStatus['BEKLEMEDE'] || 0, // Satış durumu istatistiklerinden al
+                    satisIptal: reports.animals.bySaleStatus['IPTAL'] || 0, // Satış durumu istatistiklerinden al
+                    kesilenHayvan: reports.animals.sales.kesim || 0, // Satış istatistiklerinden al
+                    damizlikSatilan: reports.animals.sales.damizlik || 0, // Satış istatistiklerinden al
+                    toplamSatilan: reports.animals.sales.total || 0 // Satış istatistiklerinden al
+                },
+                chart: {
+                    categories: {
+                        labels: Object.keys( reports.animals.byCategory ),
+                        values: Object.values( reports.animals.byCategory )
+                    },
+                    sales: {
+                        labels: ["Kesim Satışı", "Damızlık Satışı"],
+                        values: [reports.animals.sales.kesim || 0, reports.animals.sales.damizlik || 0]
+                    },
+                    saleStatus: {
+                        labels: Object.keys( reports.animals.bySaleStatus ),
+                        values: Object.values( reports.animals.bySaleStatus )
+                    }
+                }
             };
 
-            // Hedef şirket özeti
-            const [gulvet, asyaet] = await Promise.all( [
-                Animal.findByDestination( Animal.DESTINATION_COMPANIES.GULVET ),
-                Animal.findByDestination( Animal.DESTINATION_COMPANIES.ASYAET )
-            ] );
 
-            const destinationSummary = {
-                [Animal.DESTINATION_COMPANIES.GULVET]: gulvet.length,
-                [Animal.DESTINATION_COMPANIES.ASYAET]: asyaet.length
-            };
-
-            // Satış durumu özeti
-            const [beklemede, satisaHazir, satildi] = await Promise.all( [
-                Animal.findBySaleStatus( Animal.SALE_STATUS.BEKLEMEDE ),
-                Animal.findBySaleStatus( Animal.SALE_STATUS.SATISA_HAZIR ),
-                Animal.findBySaleStatus( Animal.SALE_STATUS.SATILDI )
-            ] );
-
-            const salesSummary = {
-                [Animal.SALE_STATUS.BEKLEMEDE]: beklemede.length,
-                [Animal.SALE_STATUS.SATISA_HAZIR]: satisaHazir.length,
-                [Animal.SALE_STATUS.SATILDI]: satildi.length
-            };
-
-            return {
-                inventory,
-                testResults,
-                destinationSummary,
-                salesSummary,
-                generatedAt: new Date()
-            };
+            return formattedReports;
         } catch ( error ) {
             console.error( 'Rapor oluşturma hatası:', error );
             throw new Error( 'Raporlar oluşturulurken bir hata oluştu' );

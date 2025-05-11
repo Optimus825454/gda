@@ -1,7 +1,7 @@
 /**
  * AuditService.js - Kullanıcı işlem logları servisi
  */
-const AuditLog = require('../models/AuditLog');
+const { pool } = require('../config/mysql');
 
 // Sabit log tipleri
 const LOG_ACTIONS = {
@@ -25,58 +25,98 @@ const LOG_ENTITIES = {
     SETTING: 'SETTING'
 };
 
-const AuditService = {
-    ACTIONS: LOG_ACTIONS,
-    ENTITIES: LOG_ENTITIES,
+class AuditService {
+    static ACTIONS = LOG_ACTIONS;
+    static ENTITIES = LOG_ENTITIES;
 
     /**
-     * Kullanıcı işlemini logla
-     * @param {Object} logData Log verisi
-     * @param {string} logData.userId Kullanıcı ID
-     * @param {string} logData.action İşlem tipi (LOG_ACTIONS sabitlerine bakınız)
-     * @param {string} logData.entity İşlem yapılan varlık tipi (LOG_ENTITIES sabitlerine bakınız)
-     * @param {string} logData.entityId İşlem yapılan varlık ID
-     * @param {Object} logData.details İşlem detayları
-     * @param {Object} req Express request objesi (opsiyonel)
+     * Aktivite kaydı oluşturur
+     * @param {Object} params Aktivite parametreleri
+     * @param {number} params.userId Kullanıcı ID
+     * @param {string} params.action İşlem tipi (CREATE, UPDATE, DELETE)
+     * @param {string} params.entity Modül adı (Hayvan, Kullanıcı, Satış vb.)
+     * @param {number} params.entityId Kayıt ID
+     * @param {Object} params.details İşlem detayları
      */
-    async logAction(logData, req = null) {
+    static async logAction(params) {
         try {
-            // IP adresi ve user agent bilgilerini topla
-            const ipAddress = req?.ip || req?.connection?.remoteAddress || null;
-            const userAgent = req?.headers?.['user-agent'] || null;
+            // Önce aktiviteler tablosunun varlığını kontrol et
+            const [tables] = await pool.query(`
+                SELECT TABLE_NAME 
+                FROM information_schema.TABLES 
+                WHERE TABLE_SCHEMA = DATABASE() 
+                AND TABLE_NAME = 'aktiviteler'
+            `);
 
-            // Log kaydı oluştur
-            await AuditLog.create({
-                userId: logData.userId,
-                action: logData.action,
-                entity: logData.entity,
-                entityId: logData.entityId,
-                details: logData.details || {},
-                ipAddress,
-                userAgent
-            });
-        } catch (err) {
-            // Log hatalarını sessizce yut, sistem akışını bozmasın
-            console.error('Audit log kaydı hatası:', err);
+            // Tablo yoksa kayıt yapma
+            if (tables.length === 0) {
+                console.log('Aktiviteler tablosu mevcut değil, kayıt atlanıyor.');
+                return;
+            }
+
+            // Aktivite kaydını oluştur
+            const [result] = await pool.query(`
+                INSERT INTO aktiviteler (
+                    user_id, 
+                    islem_tipi, 
+                    modul, 
+                    kayit_id, 
+                    aciklama, 
+                    detaylar
+                ) VALUES (?, ?, ?, ?, ?, ?)
+            `, [
+                params.userId,
+                params.action,
+                params.entity,
+                params.entityId,
+                params.description || `${params.entity} kaydında ${params.action} işlemi yapıldı`,
+                JSON.stringify(params.details || {})
+            ]);
+
+            return result;
+        } catch (error) {
+            console.error('Aktivite kaydı oluşturulurken hata:', error);
+            // Hatayı yukarı fırlat
+            throw error;
         }
-    },
-
-    /**
-     * Kullanıcının log kayıtlarını getir
-     * @param {string} userId Kullanıcı ID
-     * @param {Object} options Filtreleme ve sayfalama seçenekleri
-     */
-    async getUserLogs(userId, options = {}) {
-        return AuditLog.findByUserId(userId, options);
-    },
-
-    /**
-     * Tüm log kayıtlarını getir (sadece yöneticiler için)
-     * @param {Object} options Filtreleme ve sayfalama seçenekleri
-     */
-    async getAllLogs(options = {}) {
-        return AuditLog.findAll(options);
     }
-};
+
+    /**
+     * Son aktiviteleri getirir
+     * @param {number} limit Kaç kayıt getirileceği
+     */
+    static async getRecentActivities(limit = 10) {
+        try {
+            // Önce aktiviteler tablosunun varlığını kontrol et
+            const [tables] = await pool.query(`
+                SELECT TABLE_NAME 
+                FROM information_schema.TABLES 
+                WHERE TABLE_SCHEMA = DATABASE() 
+                AND TABLE_NAME = 'aktiviteler'
+            `);
+
+            // Tablo yoksa boş liste döndür
+            if (tables.length === 0) {
+                return [];
+            }
+
+            // Son aktiviteleri getir
+            const [activities] = await pool.query(`
+                SELECT 
+                    a.*,
+                    u.full_name as kullanici_adi
+                FROM aktiviteler a
+                LEFT JOIN users u ON a.user_id = u.id
+                ORDER BY a.olusturma_tarihi DESC
+                LIMIT ?
+            `, [limit]);
+
+            return activities;
+        } catch (error) {
+            console.error('Son aktiviteler getirilirken hata:', error);
+            throw error;
+        }
+    }
+}
 
 module.exports = AuditService;
